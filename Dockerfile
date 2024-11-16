@@ -7,43 +7,52 @@
 # Attribution required: please include my name in any derivative and let me
 # know how you have improved it!
 
-FROM alpine:3.20
+FROM alpine:3.20 AS base
 
-ENV SWAN_VER=5.1
+RUN --mount=type=cache,target=/var/cache/apk,sharing=locked \
+    apk update
+
+FROM base AS build
+
+RUN --mount=type=cache,target=/var/cache/apk,sharing=locked \
+    apk add gcc make flex bison coreutils bsd-compat-headers \
+    libc-dev libcap-ng-dev curl-dev libevent-dev linux-pam-dev musl-dev nss-dev
+
 WORKDIR /opt/src
+ARG SWAN_VER=5.1
+ARG SWAN_URL=https://github.com/libreswan/libreswan/archive/v${SWAN_VER}.tar.gz
+# ARG SWAN_URL=https://download.libreswan.org/libreswan-${SWAN_VER}.tar.gz
+ADD --link "${SWAN_URL}" libreswan.tar.gz
+RUN tar zxf libreswan.tar.gz
 
-RUN set -x \
-    && apk add --no-cache \
-         bash bind-tools coreutils openssl uuidgen wget xl2tpd iptables iptables-legacy \
-         iproute2 libcap-ng libcurl libevent linux-pam musl nspr nss nss-tools openrc \
-         bison flex gcc make libc-dev bsd-compat-headers linux-pam-dev \
-         nss-dev libcap-ng-dev libevent-dev curl-dev nspr-dev \
-    && cd /sbin \
-    && for fn in iptables iptables-save iptables-restore; do ln -fs xtables-legacy-multi "$fn"; done \
-    && cd /opt/src \
-    && wget -t 3 -T 30 -nv -O libreswan.tar.gz "https://github.com/libreswan/libreswan/archive/v${SWAN_VER}.tar.gz" \
-    || wget -t 3 -T 30 -nv -O libreswan.tar.gz "https://download.libreswan.org/libreswan-${SWAN_VER}.tar.gz" \
-    && tar xzf libreswan.tar.gz \
-    && rm -f libreswan.tar.gz \
-    && cd "libreswan-${SWAN_VER}" \
-    && printf 'WERROR_CFLAGS=-w -s\nUSE_DNSSEC=false\nUSE_DH2=true\n' > Makefile.inc.local \
-    && printf 'FINALNSSDIR=/etc/ipsec.d\nNSSDIR=/etc/ipsec.d\n' >> Makefile.inc.local \
-    && make -s base \
-    && make -s install-base \
-    && cd /opt/src \
-    && mkdir -p /run/openrc \
-    && touch /run/openrc/softlevel \
-    && rm -rf "/opt/src/libreswan-${SWAN_VER}" \
-    && apk del --no-cache \
-         bison flex gcc make libc-dev bsd-compat-headers linux-pam-dev \
-         nss-dev libcap-ng-dev libevent-dev curl-dev nspr-dev
+WORKDIR /opt/src/libreswan-${SWAN_VER}
+COPY --link <<EOF Makefile.inc.local
+WERROR_CFLAGS=-w -s
+USE_DNSSEC=false
+USE_DH2=true
+FINALNSSDIR=/etc/ipsec.d
+NSSDIR=/etc/ipsec.d
+INITSYSTEM=openrc
+DESTDIR=/opt/libreswan
+EOF
+RUN mkdir -p /opt/libreswan
+RUN make -s base
+RUN make -s install-base
 
-RUN wget -t 3 -T 30 -nv -O /opt/src/ikev2.sh https://github.com/hwdsl2/setup-ipsec-vpn/raw/9a625dba296d488f89c2213627931b8685efd354/extras/ikev2setup.sh \
-    && chmod +x /opt/src/ikev2.sh \
-    && ln -s /opt/src/ikev2.sh /usr/bin
+FROM base AS output
+ARG IKEV2_URL=https://github.com/hwdsl2/setup-ipsec-vpn/raw/9a625dba296d488f89c2213627931b8685efd354/extras/ikev2setup.sh
 
-COPY ./run.sh /opt/src/run.sh
-RUN chmod 755 /opt/src/run.sh
+RUN mkdir -p /run/openrc
+RUN touch /run/openrc/softlevel
+RUN --mount=type=cache,target=/var/cache/apk,sharing=locked \
+    apk add libcap-ng libcurl libevent linux-pam musl nss nss-tools
+RUN --mount=type=cache,target=/var/cache/apk,sharing=locked \
+    apk add bash bind-tools coreutils iptables iproute2 openrc openssl uuidgen wget xl2tpd
+ADD --link --chmod=755 "${IKEV2_URL}" /opt/src/ikev2.sh
+RUN ln -s /opt/src/ikev2.sh /usr/local/bin/ikev2.sh
+COPY --link --chmod=755 ./run.sh /opt/src/run.sh
+COPY --link --from=build /opt/libreswan/ /
+
 EXPOSE 500/udp 4500/udp
 CMD ["/opt/src/run.sh"]
 
