@@ -90,8 +90,8 @@ jobs:
           sleep 30
           docker ps | grep "$TEST_ID"
           docker logs "$TEST_ID"
-          docker exec "$TEST_ID" netstat -anpu | grep pluto
-          docker exec "$TEST_ID" netstat -anpu | grep xl2tpd
+          docker exec "$TEST_ID" ss -anpu | grep pluto
+          docker exec "$TEST_ID" ss -anpu | grep xl2tpd
           docker exec "$TEST_ID" iptables -nvL
           docker exec "$TEST_ID" iptables -nvL | grep -q 'ppp+'
           docker exec "$TEST_ID" iptables -nvL | grep -q '192\.168\.43\.0/24'
@@ -138,8 +138,8 @@ jobs:
           sleep 10
           docker ps | grep "$TEST_ID"
           docker logs "$TEST_ID"
-          docker exec "$TEST_ID" netstat -anpu | grep pluto
-          docker exec "$TEST_ID" netstat -anpu | grep xl2tpd
+          docker exec "$TEST_ID" ss -anpu | grep pluto
+          docker exec "$TEST_ID" ss -anpu | grep xl2tpd
           docker exec "$TEST_ID" iptables -nvL
           docker exec "$TEST_ID" iptables -nvL | grep -q 'ppp+'
           docker exec "$TEST_ID" iptables -nvL | grep -q '192\.168\.43\.0/24'
