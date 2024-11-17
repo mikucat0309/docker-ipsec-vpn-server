@@ -10,6 +10,7 @@
 name: build debian
 
 on:
+  workflow_dispatch:
   push:
     branches: [master]
     paths:
@@ -23,23 +24,9 @@ on:
 
 jobs:
   shellcheck:
-    if: github.repository_owner == 'hwdsl2'
     uses: ./.github/workflows/shellcheck.yml
 
   vpn_test:
-    if: github.repository_owner == 'hwdsl2'
     uses: ./.github/workflows/vpn_test.yml
     with:
       os_type: debian
-
-  buildx:
-    needs: [shellcheck, vpn_test]
-    uses: ./.github/workflows/buildx.yml
-    with:
-      os_type: debian
-    secrets:
-      CACHE_NAME: ${{ secrets.CACHE_NAME }}
-      DOCKER_TOKEN: ${{ secrets.DOCKER_TOKEN }}
-      QUAY_USER: ${{ secrets.QUAY_USER }}
-      QUAY_TOKEN: ${{ secrets.QUAY_TOKEN }}
-      BUILD_ONLY: ${{ secrets.BUILD_ONLY }}
