@@ -21,10 +21,12 @@ jobs:
     runs-on: ubuntu-22.04
     strategy:
       matrix:
+        iptables_type: [legacy, netfilter]
         test_id: [no-env, with-env]
       fail-fast: false
     env:
       OS_TYPE: ${{ inputs.os_type }}
+      IPTABLES_TYPE: ${{ matrix.iptables_type }}
       TEST_ID: ${{ matrix.test_id }}
     steps:
       - uses: actions/checkout@v4
@@ -50,14 +52,15 @@ jobs:
 
           set -x
 
-          if [ "$OS_TYPE" = "alpine" ]; then
-            docker build -t vpn-test .
-          elif [ "$OS_TYPE" = "debian" ]; then
-            docker build -f Dockerfile.debian -t vpn-test .
-          else
-            exit 1
+          DOCKERFILE="Dockerfile"
+          if [[ $OS_TYPE = debian ]]; then
+            DOCKERFILE="${DOCKERFILE}.debian"
           fi
-
+          if [[ $IPTABLES_TYPE = netfilter ]]; then
+            DOCKERFILE="${DOCKERFILE}.nf"
+          fi
+          docker build -f "$DOCKERFILE" -t vpn-test .
+          
           if [ "$TEST_ID" = "with-env" ]; then
             docker run \
             --name "$TEST_ID" \

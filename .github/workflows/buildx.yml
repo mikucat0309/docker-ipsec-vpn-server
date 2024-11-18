@@ -121,61 +121,38 @@ jobs:
           [ "$BUILD_ONLY" = "true" ] && BUILD_ONLY=""
           ts_now=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
 
-          if [ "$OS_TYPE" = "alpine" ]; then
-            docker buildx build \
-              --progress plain \
-              --platform=linux/amd64,linux/arm64,linux/arm/v7 \
-              --build-arg BUILD_DATE=$ts_now \
-              --build-arg VCS_REF=${GITHUB_SHA::8} \
-              --build-arg VERSION=alpine-latest \
-              --cache-from type=local,src="${RUNNER_TEMP}/.buildx-cache" \
-              --cache-to type=local,dest="${RUNNER_TEMP}/.buildx-cache-new" \
-              -t "$DOCKER_USER/ipsec-vpn-server:latest" \
-              --pull \
-              ${BUILD_ONLY:+--push} \
-              .
-
-            docker buildx build \
-              --progress plain \
-              --platform=linux/amd64,linux/arm64,linux/arm/v7 \
-              --build-arg BUILD_DATE=$ts_now \
-              --build-arg VCS_REF=${GITHUB_SHA::8} \
-              --build-arg VERSION=alpine-latest \
-              --cache-from type=local,src="${RUNNER_TEMP}/.buildx-cache-new" \
-              -t "quay.io/$DOCKER_USER/ipsec-vpn-server:latest" \
-              --pull \
-              ${BUILD_ONLY:+--push} \
-              .
-          elif [ "$OS_TYPE" = "debian" ]; then
-            docker buildx build \
-              --progress plain \
-              --platform=linux/amd64,linux/arm64,linux/arm/v7 \
-              --build-arg BUILD_DATE=$ts_now \
-              --build-arg VCS_REF=${GITHUB_SHA::8} \
-              --build-arg VERSION=debian-latest \
-              --cache-from type=local,src="${RUNNER_TEMP}/.buildx-cache" \
-              --cache-to type=local,dest="${RUNNER_TEMP}/.buildx-cache-new" \
-              -f Dockerfile.debian \
-              -t "$DOCKER_USER/ipsec-vpn-server:debian" \
-              --pull \
-              ${BUILD_ONLY:+--push} \
-              .
-
-            docker buildx build \
-              --progress plain \
-              --platform=linux/amd64,linux/arm64,linux/arm/v7 \
-              --build-arg BUILD_DATE=$ts_now \
-              --build-arg VCS_REF=${GITHUB_SHA::8} \
-              --build-arg VERSION=debian-latest \
-              --cache-from type=local,src="${RUNNER_TEMP}/.buildx-cache-new" \
-              -f Dockerfile.debian \
-              -t "quay.io/$DOCKER_USER/ipsec-vpn-server:debian" \
-              --pull \
-              ${BUILD_ONLY:+--push} \
-              .
+          DOCKEFILE=Dockerfile
+          if [[ $OS_TYPE = alpine ]]; then
+            VERSION=alpine-latest
+            IMAGE_VERSION=alpine
+          elif [[ $OS_TYPE = debian ]]; then
+            VERSION=debian-latest
+            IMAGE_VERSION=debian
+            DOCKEFILE="${DOCKEFILE}.debian"
           else
             exit 1
           fi
+
+          if [[ $IPTABLES_TYPE = netfilter ]]; then
+            DOCKEFILE="${DOCKEFILE}.nf"
+            IMAGE_VERSION="${IMAGE_VERSION}-nf"
+          fi
+          IMAGE_VERSION="${IMAGE_VERSION}-latest"
+
+          docker buildx build \
+            --progress plain \
+            --platform=linux/amd64,linux/arm64,linux/arm/v7 \
+            --build-arg BUILD_DATE=$ts_now \
+            --build-arg VCS_REF=${GITHUB_SHA::8} \
+            --build-arg VERSION=${VERSION} \
+            --cache-from type=local,src="${RUNNER_TEMP}/.buildx-cache" \
+            --cache-to type=local,dest="${RUNNER_TEMP}/.buildx-cache-new" \
+            -f "$DOCKERFILE" \
+            -t "$DOCKER_USER/ipsec-vpn-server:$IMAGE_VERSION" \
+            -t "quay.io/$DOCKER_USER/ipsec-vpn-server:$IMAGE_VERSION" \
+            --pull \
+            ${BUILD_ONLY:+--push} \
+            .
 
           /bin/rm -rf "${RUNNER_TEMP}/.buildx-cache"
           /bin/mv -f "${RUNNER_TEMP}/.buildx-cache-new" "${RUNNER_TEMP}/.buildx-cache"
